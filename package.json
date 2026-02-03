@@ -1,0 +1,49 @@
+{
+  "name": "near-balancer",
+  "version": "1.0.0",
+  "description": "High-performance NEAR RPC client with automatic load balancing, round-robin rotation, and retry logic",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "near",
+    "rpc",
+    "blockchain",
+    "load-balancer",
+    "round-robin",
+    "client",
+    "near-protocol",
+    "high-throughput",
+    "rate-limit"
+  ],
+  "author": "kamposue",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kampouse/near-balancer"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
