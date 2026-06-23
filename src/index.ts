@@ -52,12 +52,13 @@ export interface QueryParams {
 export interface RpcRequestOptions {
   /** Force a specific endpoint index (for testing) */
   endpointIndex?: number;
+  /** When true, skip JSON parsing and return raw Uint8Array for call_function results */
+  raw?: boolean;
 }
 
 export interface RpcResponse<T = unknown> {
-  result?: {
-    result?: T;
-  };
+  /** For call_function: { result: [...] } */
+  result?: T | { result?: T };
   error?: {
     message: string;
     data?: string;
@@ -152,7 +153,7 @@ class RpcClientImpl implements RpcClient {
           continue;
         }
 
-        const result = await response.json() as RpcResponse<T>;
+        const result = await response.json();
 
         // Handle RPC error
         if (result.error) {
@@ -161,28 +162,36 @@ class RpcClientImpl implements RpcClient {
           continue;
         }
 
-        // Extract and decode result
-        const rawResult = result.result?.result;
+        // Extract result — call_function nests in result.result (base64 bytes),
+        // other request types return the object directly in result
+        const rpcResult = result.result;
+        if (!rpcResult) return null;
 
-        if (!rawResult) {
-          return null;
-        }
+        // call_function: result is { result: number[] } (base64-encoded byte array)
+        const rawResult = (rpcResult != null && typeof rpcResult === 'object' && 'result' in rpcResult)
+          ? (rpcResult as Record<string, unknown>).result
+          : rpcResult;
 
-        // Handle base64 encoded result
+        if (!rawResult) return null;
+
+        // Handle base64 encoded result (call_function byte array)
         if (Array.isArray(rawResult) && rawResult.length > 0 && typeof rawResult[0] === 'number') {
-          const buffer = Buffer.from(new Uint8Array(rawResult));
+          const bytes = new Uint8Array(rawResult);
+          if (options?.raw) return bytes as unknown as T;
+          const buffer = Buffer.from(bytes);
           try {
             return JSON.parse(buffer.toString()) as T;
           } catch {
-            return null;
+            return bytes as unknown as T;
           }
         }
 
         // Handle string result (already base64 encoded)
         if (typeof rawResult === 'string') {
+          const decoded = Buffer.from(rawResult, 'base64');
+          if (options?.raw) return decoded as unknown as T;
           try {
-            const decoded = Buffer.from(rawResult, 'base64').toString();
-            return JSON.parse(decoded) as T;
+            return JSON.parse(decoded.toString()) as T;
           } catch {
             return rawResult as T;
           }

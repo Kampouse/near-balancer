@@ -182,6 +182,21 @@ describe('Error handling', () => {
     const result = await callNftView(client, 'nearlegion.nfts.tg', 'nft_total_supply');
     expect(result !== undefined).toBe(true);
   });
+
+  it('should return Uint8Array for raw option', async () => {
+    const client = createMainnetClient({ retries: 2 });
+
+    const result = await client.query<Uint8Array>({
+      request_type: 'call_function',
+      finality: 'final',
+      account_id: 'nearlegion.nfts.tg',
+      method_name: 'nft_total_supply',
+      args_base64: Buffer.from('{}').toString('base64'),
+    }, { raw: true });
+
+    expect(result).toBeDefined();
+    expect(result).toBeInstanceOf(Uint8Array);
+  });
 });
 
 describe('Helper functions', () => {
