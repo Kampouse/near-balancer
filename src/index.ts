@@ -52,6 +52,8 @@ export interface QueryParams {
 export interface RpcRequestOptions {
   /** Force a specific endpoint index (for testing) */
   endpointIndex?: number;
+  /** When true, skip JSON parsing and return raw Uint8Array for call_function results */
+  raw?: boolean;
 }
 
 export interface RpcResponse<T = unknown> {
@@ -170,19 +172,22 @@ class RpcClientImpl implements RpcClient {
 
         // Handle base64 encoded result
         if (Array.isArray(rawResult) && rawResult.length > 0 && typeof rawResult[0] === 'number') {
-          const buffer = Buffer.from(new Uint8Array(rawResult));
+          const bytes = new Uint8Array(rawResult);
+          if (options?.raw) return bytes as unknown as T;
+          const buffer = Buffer.from(bytes);
           try {
             return JSON.parse(buffer.toString()) as T;
           } catch {
-            return null;
+            return bytes as unknown as T;
           }
         }
 
         // Handle string result (already base64 encoded)
         if (typeof rawResult === 'string') {
+          const decoded = Buffer.from(rawResult, 'base64');
+          if (options?.raw) return decoded as unknown as T;
           try {
-            const decoded = Buffer.from(rawResult, 'base64').toString();
-            return JSON.parse(decoded) as T;
+            return JSON.parse(decoded.toString()) as T;
           } catch {
             return rawResult as T;
           }
