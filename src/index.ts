@@ -57,9 +57,8 @@ export interface RpcRequestOptions {
 }
 
 export interface RpcResponse<T = unknown> {
-  result?: {
-    result?: T;
-  };
+  /** For call_function: { result: [...] } */
+  result?: T | { result?: T };
   error?: {
     message: string;
     data?: string;
@@ -154,7 +153,7 @@ class RpcClientImpl implements RpcClient {
           continue;
         }
 
-        const result = await response.json() as RpcResponse<T>;
+        const result = await response.json();
 
         // Handle RPC error
         if (result.error) {
@@ -163,14 +162,19 @@ class RpcClientImpl implements RpcClient {
           continue;
         }
 
-        // Extract and decode result
-        const rawResult = result.result?.result;
+        // Extract result — call_function nests in result.result (base64 bytes),
+        // other request types return the object directly in result
+        const rpcResult = result.result;
+        if (!rpcResult) return null;
 
-        if (!rawResult) {
-          return null;
-        }
+        // call_function: result is { result: number[] } (base64-encoded byte array)
+        const rawResult = (rpcResult != null && typeof rpcResult === 'object' && 'result' in rpcResult)
+          ? (rpcResult as Record<string, unknown>).result
+          : rpcResult;
 
-        // Handle base64 encoded result
+        if (!rawResult) return null;
+
+        // Handle base64 encoded result (call_function byte array)
         if (Array.isArray(rawResult) && rawResult.length > 0 && typeof rawResult[0] === 'number') {
           const bytes = new Uint8Array(rawResult);
           if (options?.raw) return bytes as unknown as T;
