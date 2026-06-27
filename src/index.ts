@@ -65,6 +65,23 @@ export interface RpcResponse<T = unknown> {
   };
 }
 
+/** Raw JSON-RPC 2.0 envelope returned by NEAR RPC */
+interface RpcRawResponse {
+  jsonrpc?: string;
+  id?: string;
+  result?: {
+    /** call_function nests the byte array here */
+    result?: number[] | string;
+    /** other fields (block_id, block_header, etc.) */
+    [key: string]: unknown;
+  };
+  error?: {
+    message: string;
+    data?: string;
+    code?: number;
+  };
+}
+
 export interface RpcClient {
   /** Make a query request with automatic retry and endpoint rotation */
   query<T = unknown>(params: QueryParams, options?: RpcRequestOptions): Promise<T | null>;
@@ -153,7 +170,7 @@ class RpcClientImpl implements RpcClient {
           continue;
         }
 
-        const result = await response.json();
+        const result = (await response.json()) as RpcRawResponse;
 
         // Handle RPC error
         if (result.error) {
@@ -166,6 +183,15 @@ class RpcClientImpl implements RpcClient {
         // other request types return the object directly in result
         const rpcResult = result.result;
         if (!rpcResult) return null;
+
+        // Detect embedded contract execution errors (e.g. MethodNotFound, wasm
+        // panics). NEAR returns these as a 200 OK with the error string living
+        // inside result.result rather than as a top-level JSON-RPC error.
+        if ('error' in rpcResult && typeof rpcResult.error === 'string') {
+          if (attempt === retries - 1) return null;
+          await this.delay(retryDelay);
+          continue;
+        }
 
         // call_function: result is { result: number[] } (base64-encoded byte array)
         const rawResult = (rpcResult != null && typeof rpcResult === 'object' && 'result' in rpcResult)
@@ -313,16 +339,21 @@ export async function callFtView<T = unknown>(
 
 /**
  * Get account balance
+ *
+ * Returns liquid (`amount`) and staked (`staked`) balances.
+ * NEAR RPC calls the staked field `locked` — we rename it for clarity.
  */
 export async function getAccountBalance(
   client: RpcClient,
   accountId: string
-): Promise<{ amount: string; staked: string; } | null> {
-  return client.query({
+): Promise<{ amount: string; staked: string } | null> {
+  const result = await client.query<{ amount: string; locked: string }>({
     request_type: 'view_account',
     finality: 'final',
     account_id: accountId,
   });
+  if (!result) return null;
+  return { amount: result.amount, staked: result.locked };
 }
 
 // ============================================================================

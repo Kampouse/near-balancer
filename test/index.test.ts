@@ -115,7 +115,7 @@ describe('Live RPC calls (integration tests)', () => {
   });
 
   it('should get account balance', async () => {
-    const balance = await getAccountBalance(client, 'near.near');
+    const balance = await getAccountBalance(client, 'aurora.near');
 
     expect(balance).toBeDefined();
     if (balance) {
